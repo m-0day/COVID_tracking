@@ -1,0 +1,179 @@
+import pandas as pd 
+import os as os 
+from pathlib import Path
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+import plotly.graph_objects as go 
+from ipywidgets import widgets
+import datetime as dt
+from sklearn.metrics import r2_score
+
+import dash
+import dash_core_components as dcc
+import dash_html_components as html
+from dash.dependencies import Input, Output
+
+rootdir_os = 'IHME_projections/Unzipped'
+rootdir_p = Path(r'IHME_projections/Unzipped')
+
+CDCdf = pd.read_csv('CDC_data/Provisional_COVID-19_Death_Counts_by_Week_Ending_Date_and_State.csv')
+covtrkrdf = pd.read_csv('covidtracking/historic_US_0501.csv')
+
+#### CDC Data clean and pre-process ####
+CDCdf = CDCdf[CDCdf['State'] == 'United States']
+weekending_dat = CDCdf[CDCdf['Indicator'] == 'Week-ending']
+y_weekending_dat = weekending_dat['COVID Deaths']
+x_weekending_dat = weekending_dat['Start week']
+vals = []
+x_dates = []
+
+for i in (range(2, len(x_weekending_dat))):
+    # print(i)
+    # if (i < (len(x_weekending_dat)-1)):
+    stop = pd.to_datetime(x_weekending_dat[i])
+    delt = pd.to_timedelta(7, unit='d')
+    start = stop - delt
+    date_holder = pd.date_range(start, stop)
+    vals[7*(i-1):(7*i)-1] = [y_weekending_dat[i]/7]*7
+    x_dates.append(date_holder)
+    # elif (i == (len(x_weekending_dat))):
+    #     print('hi')
+
+new_x = pd.date_range(x_dates[0][1], x_dates[-1][-1])
+
+#### COVIDTracker.com Data clean and pre-process ####
+covtrkrdf.date = pd.to_datetime(covtrkrdf.date, format = '%Y%m%d')
+cov_x = covtrkrdf.date 
+cov_y = covtrkrdf.deathIncrease
+
+sp = rootdir_p.parts
+print(sp)
+
+
+dfs = {}
+df_names = list()
+for subdir, dirs, files in os.walk(rootdir_os):
+    for file in files:
+        ext = os.path.splitext(file)[-1].lower()
+        p = Path(subdir)
+        date = p.parts[-1][:10]
+        date = date[5:]
+        if ext == '.csv':
+            
+            # print (os.path.join(subdir, file))
+            # print(date)
+            df_name = str('df_' + date) 
+            df_names.append(df_name)
+            dfs[str(df_name)]=pd.read_csv(subdir + "//" + file)
+
+df_names.sort()
+
+states = ["Alabama","Alaska","Arizona","Arkansas","California","Colorado",
+  "Connecticut","Delaware","Florida","Georgia","Hawaii","Idaho","Illinois",
+  "Indiana","Iowa","Kansas","Kentucky","Louisiana","Maine","Maryland",
+  "Massachusetts","Michigan","Minnesota","Mississippi","Missouri","Montana",
+  "Nebraska","Nevada","New Hampshire","New Jersey","New Mexico","New York",
+  "North Carolina","North Dakota","Ohio","Oklahoma","Oregon","Pennsylvania",
+  "Rhode Island","South Carolina","South Dakota","Tennessee","Texas","Utah",
+  "Vermont","Virginia","Washington","West Virginia","Wisconsin","Wyoming"]
+
+df = dfs[df_names[-1]][dfs[df_names[-1]]['location_name'].isin(states)]
+
+x = df['date'].unique()
+x = [dt.datetime.strptime(d,'%Y-%m-%d').date() for d in x]
+
+#### Make Plots ####
+# Slider for date of projection
+# Dropdown for projection (IHME, other if I find one with historical projections)
+# Dropdown for deaths count source (covidtracker.com or CDC)
+# [Optional] color forecasted line (based on slider date) in a different color
+
+traces1 = [0]*(len(df_names))
+traces2 = [0]*(len(df_names))
+traces3 = [0]*(len(df_names))
+traces4 = [0]*(len(df_names))
+artoo = [0]*len(df_names)
+
+for i in range(len(df_names)):
+    df = dfs[df_names[i]][dfs[df_names[i]]['location_name'].isin(states)]
+    max_date = max(cov_x)
+    mon = df_names[i][3:5]
+    day = df_names[i][6:]
+    pred_date = pd.to_datetime(str('2020'+mon+day), format = '%Y%m%d')
+    date_rng = pd.date_range(pred_date, max_date)
+    cov_mask = covtrkrdf.date.isin(date_rng)
+    covdf = covtrkrdf[cov_mask].set_index('date').iloc[::-1]
+    artoo_y = covdf.deathIncrease
+    try:
+        x = df['date'].unique()
+        y = df.groupby(['date'])['deaths_mean'].sum()
+        CI_upper = df.groupby(['date'])['deaths_upper'].sum()
+        CI_lower = df.groupby(['date'])['deaths_lower'].sum()
+        mask = pd.to_datetime(df.date.values).isin(date_rng)
+        little_df = df[mask]
+        pred_y = little_df.groupby(['date'])['deaths_mean'].sum()
+    except:
+        x = df['date_reported'].unique()
+        y = df.groupby(['date_reported'])['deaths_mean'].sum()
+        CI_upper = df.groupby(['date_reported'])['deaths_upper'].sum()
+        CI_lower = df.groupby(['date_reported'])['deaths_lower'].sum()
+        mask = pd.to_datetime(df.date_reported.values).isin(date_rng)
+        little_df = df[mask]
+        pred_y = little_df.groupby(['date_reported'])['deaths_mean'].sum()
+    finally:
+        x = [dt.datetime.strptime(d,'%Y-%m-%d').date() for d in x]
+        
+        traces1[i] = go.Scatter(x = x, y = y, opacity= 0.8, name = str('IHME projected deaths for '+ df_names[i]))
+        traces2[i] = go.Scatter(x = cov_x, y = cov_y, opacity = 0.8, name = "COVIDtracker.com recorded deaths")
+        traces3[i] = go.Scatter(x = x, y = CI_upper, opacity = 0.2, name = "95% CI", line = dict(dash = 'dash'))
+        traces4[i] = go.Scatter(x = x, y = CI_lower, opacity = 0.2, fill = 'tonexty', name = "95% CI", line = dict(dash = 'dash'))
+
+
+        artoo[i] = r2_score(artoo_y, pred_y).round(4)
+        
+        
+        
+# Create Dash app
+app = dash.Dash(
+    __name__,
+    meta_tags=[
+        {"name": "viewport", "content": "width=device-width, initial-scale=1.0"}
+    ]
+)
+
+scatterplot = dcc.Graph(
+    id='scatterplot',
+    figure=go.Figure(
+        data=[traces1[0], traces2[0], traces3[0], traces4[0]],
+        layout=go.Layout(title = dict(text = 'IHME model projection'))
+    ),
+    animate=True
+)
+
+slider = dcc.Slider(
+    id='date-slider',
+    min=0,
+    max=len(df_names)-1,
+    marks={i: df_name[3:].replace('_', '/') for i, df_name in enumerate(df_names)},
+    value=0,
+    updatemode='drag'
+)
+
+app.layout = html.Div([
+    scatterplot,
+    slider
+])
+
+@app.callback(Output('scatterplot', 'figure'),
+              [Input('date-slider', 'value')])
+def display_value(value):
+    traces = [
+        traces1[value],
+        traces2[value],
+        traces3[value],
+        traces4[value]
+    ]
+    return {'data': traces, 'layout': go.Layout(title = dict(text = 'IHME Model Projections'))}
+
+app.title = 'IHME Model Projections'
+app.run_server(debug=True, use_reloader=True)
