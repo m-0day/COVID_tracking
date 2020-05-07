@@ -42,6 +42,7 @@ cov_y = covtrkrdf.deathIncrease
 sp = rootdir_p.parts
 print(sp)
 
+#### IHME model ingest ####
 
 dfs = {}
 df_names = list()
@@ -74,6 +75,32 @@ df = dfs[df_names[-1]][dfs[df_names[-1]]['location_name'].isin(states)]
 
 x = df['date'].unique()
 x = [dt.datetime.strptime(d,'%Y-%m-%d').date() for d in x]
+
+#### Los Alamos model ingest ####
+
+rootdir_os = 'C:\\Users\\chris.mclean\\Documents\\Python Scripts\\COVID analysis\\Los Alamos projections'
+rootdir_p = Path(r'C:\Users\chris.mclean\Documents\Python Scripts\COVID analysis\Los Alamos projections')
+
+ladfs = {}
+ladf_names = list()
+for subdir, dirs, files in os.walk(rootdir_os):
+    for file in files:
+        ext = os.path.splitext(file)[-1].lower()
+        date = file[:10]
+        if ext == '.csv':
+            
+            # print (os.path.join(subdir, file))
+            # print(date)
+            ladf_name = str('df_' + date) 
+            ladf_names.append(ladf_name)
+            ladfs[str(ladf_name)]=pd.read_csv(subdir + "//" + file)
+            ladfs[str(ladf_name)].dates = pd.to_datetime(ladfs[str(ladf_name)].dates)
+            ladfs[str(ladf_name)] = ladfs[str(ladf_name)][ladfs[str(ladf_name)].simple_state.isin(states)]
+
+ladf_names.sort()
+
+# ladf = dfs[df_names[-1]][dfs[df_names[-1]]['location_name'].isin(states)]
+
 
 # i = 0
 # max_date = max(cov_x)
