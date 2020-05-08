@@ -71,6 +71,8 @@ states = ["Alabama","Alaska","Arizona","Arkansas","California","Colorado",
   "Rhode Island","South Carolina","South Dakota","Tennessee","Texas","Utah",
   "Vermont","Virginia","Washington","West Virginia","Wisconsin","Wyoming"]
 
+lcstates = [x.lower() for x in states]
+
 df = dfs[df_names[-1]][dfs[df_names[-1]]['location_name'].isin(states)]
 
 x = df['date'].unique()
@@ -95,7 +97,7 @@ for subdir, dirs, files in os.walk(rootdir_os):
             ladf_names.append(ladf_name)
             ladfs[str(ladf_name)]=pd.read_csv(subdir + "//" + file)
             ladfs[str(ladf_name)].dates = pd.to_datetime(ladfs[str(ladf_name)].dates)
-            ladfs[str(ladf_name)] = ladfs[str(ladf_name)][ladfs[str(ladf_name)].simple_state.isin(states)]
+            ladfs[str(ladf_name)] = ladfs[str(ladf_name)][ladfs[str(ladf_name)].simple_state.isin(lcstates)]
 
 ladf_names.sort()
 

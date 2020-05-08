@@ -17,7 +17,7 @@ rootdir_os = 'IHME_projections/Unzipped'
 rootdir_p = Path(r'IHME_projections/Unzipped')
 
 CDCdf = pd.read_csv('CDC_data/Provisional_COVID-19_Death_Counts_by_Week_Ending_Date_and_State.csv')
-covtrkrdf = pd.read_csv('covidtracking/historic_US_0501.csv')
+covtrkrdf = pd.read_csv('covidtracking/historic_US_0508.csv')
 
 #### CDC Data clean and pre-process ####
 CDCdf = CDCdf[CDCdf['State'] == 'United States']
@@ -75,12 +75,39 @@ states = ["Alabama","Alaska","Arizona","Arkansas","California","Colorado",
   "Nebraska","Nevada","New Hampshire","New Jersey","New Mexico","New York",
   "North Carolina","North Dakota","Ohio","Oklahoma","Oregon","Pennsylvania",
   "Rhode Island","South Carolina","South Dakota","Tennessee","Texas","Utah",
-  "Vermont","Virginia","Washington","West Virginia","Wisconsin","Wyoming"]
+  "Vermont","Virginia","Washington","West Virginia","Wisconsin","Wyoming", 
+  "District of Columbia"]
+
+lcstates = [x.lower() for x in states]
 
 df = dfs[df_names[-1]][dfs[df_names[-1]]['location_name'].isin(states)]
 
 x = df['date'].unique()
 x = [dt.datetime.strptime(d,'%Y-%m-%d').date() for d in x]
+
+
+rootdir_os = 'C:\\Users\\chris.mclean\\Documents\\Python Scripts\\COVID analysis\\Los Alamos projections'
+rootdir_p = Path(r'C:\Users\chris.mclean\Documents\Python Scripts\COVID analysis\Los Alamos projections')
+
+#### Los Alamos Model Ingest ####
+ladfs = {}
+ladf_names = list()
+for subdir, dirs, files in os.walk(rootdir_os):
+    for file in files:
+        ext = os.path.splitext(file)[-1].lower()
+        date = file[:10]
+        if ext == '.csv':
+            
+            # print (os.path.join(subdir, file))
+            # print(date)
+            ladf_name = str('df_' + date) 
+            ladf_names.append(ladf_name)
+            ladfs[str(ladf_name)]=pd.read_csv(subdir + "//" + file)
+            ladfs[str(ladf_name)].dates = pd.to_datetime(ladfs[str(ladf_name)].dates)
+            ladfs[str(ladf_name)] = ladfs[str(ladf_name)][ladfs[str(ladf_name)].state.isin(states)]
+
+ladf_names.sort()
+
 
 #### Make Plots ####
 # Slider for date of projection
@@ -102,14 +129,19 @@ traces = {
         [0]*(len(df_names))
     ],
     'los_alamos': [
-        [0]*(len(df_names)),
-        [0]*(len(df_names)),
-        [0]*(len(df_names)),
-        [0]*(len(df_names))
+        [0]*(len(ladf_names)),
+        [0]*(len(ladf_names)),
+        [0]*(len(ladf_names)),
+        [0]*(len(ladf_names))
     ]
 }
 
-artoo = [0]*len(df_names)
+
+
+artoo = {
+    'ihme': [0]*len(df_names),
+    'los_alamos': [0]*len(ladf_names)
+}
 
 for i in range(len(df_names)):
     df = dfs[df_names[i]][dfs[df_names[i]]['location_name'].isin(states)]
@@ -145,14 +177,35 @@ for i in range(len(df_names)):
         traces['ihme'][3][i] = go.Scatter(x = x, y = CI_lower, opacity = 0.2, fill = 'tonexty', name = "95% CI", line = dict(dash = 'dash'))
         
         # Duplicating ihme for los alamos to test dropdown
-        traces['los_alamos'][0][i] = go.Scatter(x = x, y = y, opacity= 0.8, name = str('IHME projected deaths for '+ df_names[i]))
-        traces['los_alamos'][1][i] = go.Scatter(x = cov_x, y = cov_y, opacity = 0.8, name = "COVIDtracker.com recorded deaths")
-        traces['los_alamos'][2][i] = go.Scatter(x = x, y = CI_upper, opacity = 0.2, name = "95% CI", line = dict(dash = 'dash'))
-        traces['los_alamos'][3][i] = go.Scatter(x = x, y = CI_lower, opacity = 0.2, fill = 'tonexty', name = "95% CI", line = dict(dash = 'dash'))
+        
+        artoo['ihme'][i] = r2_score(artoo_y, pred_y).round(4)
+        
+for i in range(len(ladf_names)):
+    df = ladfs[ladf_names[i]]
+    max_date = max(cov_x)
+    year = ladf_names[i][3:7]
+    mon = ladf_names[i][8:10]
+    day = ladf_names[i][11:13]
+    pred_date = pd.to_datetime(str(year+mon+day), format = '%Y%m%d')
+    date_rng = pd.date_range(pred_date, max_date)
+    cov_mask = covtrkrdf.date.isin(date_rng)
+    covdf = covtrkrdf[cov_mask].set_index('date').iloc[::-1]
+    artoo_y = covdf.deathIncrease
+    x = df['dates'].unique()
+    y = df.groupby(['dates'])['q.50'].sum()
+    CI_upper = df.groupby(['dates'])['q.95'].sum()
+    CI_lower = df.groupby(['dates'])['q.05'].sum()
+    mask = pd.to_datetime(df.dates.values).isin(date_rng)
+    little_df = df[mask]
+    pred_y = little_df.groupby(['dates'])['q.50'].sum()
 
-        artoo[i] = r2_score(artoo_y, pred_y).round(4)
-        
-        
+    traces['los_alamos'][0][i] = go.Scatter(x = x, y = y, opacity= 0.8, name = str('IHME projected deaths for '+ ladf_names[i]))
+    traces['los_alamos'][1][i] = go.Scatter(x = cov_x, y = cov_y, opacity = 0.8, name = "COVIDtracker.com recorded deaths")
+    traces['los_alamos'][2][i] = go.Scatter(x = x, y = CI_upper, opacity = 0.2, name = "95% CI", line = dict(dash = 'dash'))
+    traces['los_alamos'][3][i] = go.Scatter(x = x, y = CI_lower, opacity = 0.2, fill = 'tonexty', name = "95% CI", line = dict(dash = 'dash'))
+
+    artoo['los_alamos'][i] = r2_score(artoo_y, pred_y).round(4)
+
         
 # Create Dash app
 app = dash.Dash(
