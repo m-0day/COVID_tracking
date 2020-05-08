@@ -88,10 +88,27 @@ x = [dt.datetime.strptime(d,'%Y-%m-%d').date() for d in x]
 # Dropdown for deaths count source (covidtracker.com or CDC)
 # [Optional] color forecasted line (based on slider date) in a different color
 
-traces1 = [0]*(len(df_names))
-traces2 = [0]*(len(df_names))
-traces3 = [0]*(len(df_names))
-traces4 = [0]*(len(df_names))
+##### Sam's Suggestion #####
+"""
+    I think the play is to add another level to the traces{n} data structure so
+    that you can look up the IHME projections with something like traces['ihme'][1][i]
+    instead of traces1[i]. The traces dictionary below fits this structure.
+"""
+traces = {
+    'ihme': [
+        [0]*(len(df_names)),
+        [0]*(len(df_names)),
+        [0]*(len(df_names)),
+        [0]*(len(df_names))
+    ],
+    'los_alamos': [
+        [0]*(len(df_names)),
+        [0]*(len(df_names)),
+        [0]*(len(df_names)),
+        [0]*(len(df_names))
+    ]
+}
+
 artoo = [0]*len(df_names)
 
 for i in range(len(df_names)):
@@ -122,12 +139,16 @@ for i in range(len(df_names)):
         pred_y = little_df.groupby(['date_reported'])['deaths_mean'].sum()
     finally:
         x = [dt.datetime.strptime(d,'%Y-%m-%d').date() for d in x]
+        traces['ihme'][0][i] = go.Scatter(x = x, y = y, opacity= 0.8, name = str('IHME projected deaths for '+ df_names[i]))
+        traces['ihme'][1][i] = go.Scatter(x = cov_x, y = cov_y, opacity = 0.8, name = "COVIDtracker.com recorded deaths")
+        traces['ihme'][2][i] = go.Scatter(x = x, y = CI_upper, opacity = 0.2, name = "95% CI", line = dict(dash = 'dash'))
+        traces['ihme'][3][i] = go.Scatter(x = x, y = CI_lower, opacity = 0.2, fill = 'tonexty', name = "95% CI", line = dict(dash = 'dash'))
         
-        traces1[i] = go.Scatter(x = x, y = y, opacity= 0.8, name = str('IHME projected deaths for '+ df_names[i]))
-        traces2[i] = go.Scatter(x = cov_x, y = cov_y, opacity = 0.8, name = "COVIDtracker.com recorded deaths")
-        traces3[i] = go.Scatter(x = x, y = CI_upper, opacity = 0.2, name = "95% CI", line = dict(dash = 'dash'))
-        traces4[i] = go.Scatter(x = x, y = CI_lower, opacity = 0.2, fill = 'tonexty', name = "95% CI", line = dict(dash = 'dash'))
-
+        # Duplicating ihme for los alamos to test dropdown
+        traces['los_alamos'][0][i] = go.Scatter(x = x, y = y, opacity= 0.8, name = str('IHME projected deaths for '+ df_names[i]))
+        traces['los_alamos'][1][i] = go.Scatter(x = cov_x, y = cov_y, opacity = 0.8, name = "COVIDtracker.com recorded deaths")
+        traces['los_alamos'][2][i] = go.Scatter(x = x, y = CI_upper, opacity = 0.2, name = "95% CI", line = dict(dash = 'dash'))
+        traces['los_alamos'][3][i] = go.Scatter(x = x, y = CI_lower, opacity = 0.2, fill = 'tonexty', name = "95% CI", line = dict(dash = 'dash'))
 
         artoo[i] = r2_score(artoo_y, pred_y).round(4)
         
@@ -141,13 +162,22 @@ app = dash.Dash(
     ]
 )
 
+dropdown = dcc.Dropdown(
+    id='dropdown',
+    options=[
+        {'label': 'IHME Projections', 'value': 'ihme'},
+        {'label': 'Los Alamos Projections', 'value': 'los_alamos'},
+    ],
+    value='ihme'
+)
+
 scatterplot = dcc.Graph(
     id='scatterplot',
     figure=go.Figure(
-        data=[traces1[0], traces2[0], traces3[0], traces4[0]],
+        data=[trace[0] for trace in traces['ihme']],
         layout=go.Layout(title = dict(text = 'IHME model projection'))
     ),
-    animate=True
+    animate=False
 )
 
 slider = dcc.Slider(
@@ -160,20 +190,17 @@ slider = dcc.Slider(
 )
 
 app.layout = html.Div([
+    dropdown,
     scatterplot,
     slider
 ])
 
 @app.callback(Output('scatterplot', 'figure'),
-              [Input('date-slider', 'value')])
-def display_value(value):
-    traces = [
-        traces1[value],
-        traces2[value],
-        traces3[value],
-        traces4[value]
-    ]
-    return {'data': traces, 'layout': go.Layout(title = dict(text = 'IHME Model Projections'))}
+              [Input('dropdown', 'value'),
+               Input('date-slider', 'value')])
+def display_value(model, date):
+    _traces = [trace[date] for trace in traces[model]]
+    return {'data': _traces, 'layout': go.Layout(title = dict(text = 'IHME Model Projections'))}
 
 app.title = 'IHME Model Projections'
 app.run_server(debug=True, use_reloader=True)
