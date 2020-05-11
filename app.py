@@ -189,10 +189,10 @@ for i in range(len(df_names)):
         pred_y = little_df.groupby(['date_reported'])['deaths_mean'].sum()
     finally:
         # x = [dt.datetime.strptime(d,'%Y-%m-%d').date() for d in x]
-        traces['ihme'][0][i] = go.Scatter(x = x, y = y, opacity= 0.8, name = str('IHME projected deaths for '+ df_names[i]))
-        traces['ihme'][1][i] = go.Scatter(x = cov_x, y = cov_y, opacity = 0.8, name = 'COVIDtracker.com recorded deaths')
-        traces['ihme'][2][i] = go.Scatter(x = x, y = CI_upper, opacity = 0.2, name = '95% CI', line = dict(dash = 'dash'))
-        traces['ihme'][3][i] = go.Scatter(x = x, y = CI_lower, opacity = 0.2, fill = 'tonexty', name = '95% CI', line = dict(dash = 'dash'))
+        traces['ihme'][0][i] = go.Scatter(x = x, y = y, opacity= 0.8, name = 'Projected COVID19 Daily Deaths')
+        traces['ihme'][1][i] = go.Scatter(x = cov_x, y = cov_y, opacity = 0.8, name = 'COVIDtracker.com Recorded Daily Deaths')
+        traces['ihme'][2][i] = go.Scatter(x = x, y = CI_upper, opacity = 0.2, name = '95% CI Upper Limit', line = dict(dash = 'dash'))
+        traces['ihme'][3][i] = go.Scatter(x = x, y = CI_lower, opacity = 0.2, fill = 'tonexty', name = '95% CI Lower Limit', line = dict(dash = 'dash'))
         
         # Duplicating ihme for los alamos to test dropdown
         
@@ -289,6 +289,8 @@ app.layout = html.Div([
               [Input('dropdown', 'value'),
                Input('date-slider', 'value')])
 def display_value(model, date):
+    if date > len(marks[model]) - 1:
+        date = len(marks[model]) - 1
     _traces = [trace[date] for trace in traces[model]]
     return {'data': _traces, 'layout': go.Layout(dict(title = f"{titles[model]} Model Projection as of {marks[model][date]}"))}
 
@@ -306,6 +308,8 @@ def update_slider_range(model):
               [Input('dropdown', 'value'),
                Input('date-slider', 'value')])
 def update_info(model, date):
+    if date > len(marks[model]) - 1:
+        date = len(marks[model]) - 1
     return generate_info_markdown(model, date)
 
 app.title = 'IHME Model Projections'
