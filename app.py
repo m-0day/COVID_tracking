@@ -69,6 +69,9 @@ for subdir, dirs, files in os.walk(rootdir_os):
 
 df_names.sort()
 
+names = {}
+names['ihme'] = df_names
+
 states = ["Alabama","Alaska","Arizona","Arkansas","California","Colorado",
   "Connecticut","Delaware","Florida","Georgia","Hawaii","Idaho","Illinois",
   "Indiana","Iowa","Kansas","Kentucky","Louisiana","Maine","Maryland",
@@ -108,6 +111,8 @@ for subdir, dirs, files in os.walk(rootdir_os):
             ladfs[str(ladf_name)] = ladfs[str(ladf_name)][ladfs[str(ladf_name)].state.isin(states)]
 
 ladf_names.sort()
+
+names['los_alamos'] = ladf_names
 
 for i in range(len(ladf_names)):
     ladfs[ladf_names[i]]['daily_deaths'] = ladfs[ladf_names[i]].groupby(['state'])['q.50'].diff()
@@ -246,26 +251,37 @@ scatterplot = dcc.Graph(
     animate=False
 )
 
-df_marks = {i: df_name[3:].replace('_', '/') for i, df_name in enumerate(df_names)}
-ladf_marks = {i: df_name[8:].replace('-', '/') for i, df_name in enumerate(ladf_names)}
+marks = {
+    'ihme': {i: name[3:].replace('_', '/') for i, name in enumerate(names['ihme'])},
+    'los_alamos': {i: name[8:].replace('-', '/') for i, name in enumerate(names['los_alamos'])}
+}
+
+
 slider = dcc.Slider(
     id='date-slider',
     min=0,
-    max=len(df_names)-1,
-    marks=df_marks,
+    max=len(names['ihme'])-1,
+    marks=marks['ihme'],
     value=0,
     updatemode='drag'
 )
 
-slider_title = html.H4(
-    f'Projections as of...{df_marks[0]}',
-    id='slider-title'
+
+def generate_info_markdown(model, date):
+    return f'''
+        **MAPE:** {mape[model][date]}
+        **R2:** {artoo[model][date]}
+    '''
+
+info = dcc.Markdown(
+    generate_info_markdown('ihme', 0),
+    id='info'
 )
 
 app.layout = html.Div([
     dropdown,
     scatterplot,
-    slider_title,
+    info,
     slider
 ])
 
@@ -274,32 +290,23 @@ app.layout = html.Div([
                Input('date-slider', 'value')])
 def display_value(model, date):
     _traces = [trace[date] for trace in traces[model]]
-    return {'data': _traces, 'layout': go.Layout(dict(title = f"{titles[model]} model projection"))}
+    return {'data': _traces, 'layout': go.Layout(dict(title = f"{titles[model]} Model Projection as of {marks[model][date]}"))}
 
 @app.callback(Output('date-slider', 'max'),
               [Input('dropdown', 'value')])
 def update_slider_range(model):
-    if model == 'ihme':
-        return len(df_names) - 1
-    elif model == 'los_alamos':
-        return len(ladf_names) - 1
+    return len(names[model]) - 1
 
 @app.callback(Output('date-slider', 'marks'),
               [Input('dropdown', 'value')])
 def update_slider_range(model):
-    if model == 'ihme':
-        return df_marks
-    elif model == 'los_alamos':
-        return ladf_marks
+    return marks[model]
 
-@app.callback(Output('slider-title', 'children'),
+@app.callback(Output('info', 'children'),
               [Input('dropdown', 'value'),
                Input('date-slider', 'value')])
-def update_slider_range(model, date):
-    if model == 'ihme':
-        return f'Projections as of {df_marks[date]}'
-    elif model == 'los_alamos':
-        return f'Projections as of {ladf_marks[date]}'
-    
+def update_info(model, date):
+    return generate_info_markdown(model, date)
+
 app.title = 'IHME Model Projections'
 app.run_server(debug=True, use_reloader=True)
