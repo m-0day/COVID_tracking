@@ -189,7 +189,7 @@ for i in range(len(df_names)):
         
         artoo['ihme'][i] = r2_score(artoo_y, pred_y).round(4)
         mape['ihme'][i] = np.round(MAPE(artoo_y, pred_y), 4)
-        
+
 for i in range(len(ladf_names)):
     df = ladfs[ladf_names[i]]
     max_date = max(cov_x)
@@ -201,14 +201,13 @@ for i in range(len(ladf_names)):
     cov_mask = covtrkrdf.date.isin(date_rng)
     covdf = covtrkrdf[cov_mask].set_index('date').iloc[::-1]
     artoo_y = covdf.death
-    x = df['dates'].unique()
+    x = [str(d)[:10] for d in df['dates'].unique()]
     y = df.groupby(['dates'])['q.50'].sum()
     CI_upper = df.groupby(['dates'])['q.95'].sum()
     CI_lower = df.groupby(['dates'])['q.05'].sum()
     mask = pd.to_datetime(df.dates.values).isin(date_rng)
     little_df = df[mask]
     pred_y = little_df.groupby(['dates'])['q.50'].sum()
-
     traces['los_alamos'][0][i] = go.Scatter(x = x, y = y, opacity= 0.8, name = str('IHME projected deaths for '+ ladf_names[i]))
     traces['los_alamos'][1][i] = go.Scatter(x = cov_x, y = cov_y, opacity = 0.8, name = 'COVIDtracker.com recorded deaths')
     traces['los_alamos'][2][i] = go.Scatter(x = x, y = CI_upper, opacity = 0.2, name = '95% CI', line = dict(dash = 'dash'))
@@ -216,14 +215,9 @@ for i in range(len(ladf_names)):
 
     artoo['los_alamos'][i] = r2_score(artoo_y, pred_y).round(4)
     mape['los_alamos'][i] = np.round(MAPE(artoo_y, pred_y), 4)
-        
+
 # Create Dash app
-app = dash.Dash(
-    __name__,
-    meta_tags=[
-        {'name': 'viewport', 'content': 'width=device-width, initial-scale=1.0'}
-    ]
-)
+app = dash.Dash()
 
 dropdown = dcc.Dropdown(
     id='dropdown',
@@ -234,27 +228,40 @@ dropdown = dcc.Dropdown(
     value='ihme'
 )
 
+titles = {
+    'ihme': 'IHME',
+    'los_alamos': 'Los Alamos'
+}
+
 scatterplot = dcc.Graph(
     id='scatterplot',
     figure=go.Figure(
         data=[trace[0] for trace in traces['ihme']],
-        layout=go.Layout(title = dict(text = 'IHME model projection'))
+        layout=go.Layout(title = dict(text = f"{titles['ihme']} model projection"))
     ),
     animate=False
 )
 
+df_marks = {i: df_name[3:].replace('_', '/') for i, df_name in enumerate(df_names)}
+ladf_marks = {i: df_name[8:].replace('-', '/') for i, df_name in enumerate(ladf_names)}
 slider = dcc.Slider(
     id='date-slider',
     min=0,
     max=len(df_names)-1,
-    marks={i: df_name[3:].replace('_', '/') for i, df_name in enumerate(df_names)},
+    marks=df_marks,
     value=0,
     updatemode='drag'
+)
+
+slider_title = html.H4(
+    f'Projections as of...{df_marks[0]}',
+    id='slider-title'
 )
 
 app.layout = html.Div([
     dropdown,
     scatterplot,
+    slider_title,
     slider
 ])
 
@@ -263,7 +270,32 @@ app.layout = html.Div([
                Input('date-slider', 'value')])
 def display_value(model, date):
     _traces = [trace[date] for trace in traces[model]]
-    return {'data': _traces, 'layout': go.Layout(title = dict(text = 'IHME Model Projections'))}
+    return {'data': _traces, 'layout': go.Layout(dict(title = f"{titles[model]} model projection"))}
 
+@app.callback(Output('date-slider', 'max'),
+              [Input('dropdown', 'value')])
+def update_slider_range(model):
+    if model == 'ihme':
+        return len(df_names) - 1
+    elif model == 'los_alamos':
+        return len(ladf_names) - 1
+
+@app.callback(Output('date-slider', 'marks'),
+              [Input('dropdown', 'value')])
+def update_slider_range(model):
+    if model == 'ihme':
+        return df_marks
+    elif model == 'los_alamos':
+        return ladf_marks
+
+@app.callback(Output('slider-title', 'children'),
+              [Input('dropdown', 'value'),
+               Input('date-slider', 'value')])
+def update_slider_range(model, date):
+    if model == 'ihme':
+        return f'Projections as of {df_marks[date]}'
+    elif model == 'los_alamos':
+        return f'Projections as of {ladf_marks[date]}'
+    
 app.title = 'IHME Model Projections'
 app.run_server(debug=True, use_reloader=True)
