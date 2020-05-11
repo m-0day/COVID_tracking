@@ -1,12 +1,13 @@
 import pandas as pd 
 import os as os 
 from pathlib import Path
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
+# import matplotlib.pyplot as plt
+# import matplotlib.dates as mdates
 import plotly.graph_objects as go 
-from ipywidgets import widgets
+# from ipywidgets import widgets
 import datetime as dt
 from sklearn.metrics import r2_score
+import numpy as np
 
 import dash
 import dash_core_components as dcc
@@ -17,7 +18,7 @@ rootdir_os = 'IHME_projections/Unzipped'
 rootdir_p = Path(r'IHME_projections/Unzipped')
 
 CDCdf = pd.read_csv('CDC_data/Provisional_COVID-19_Death_Counts_by_Week_Ending_Date_and_State.csv')
-covtrkrdf = pd.read_csv('covidtracking/historic_US_0508.csv')
+covtrkrdf = pd.read_csv('covidtracking/historic_US_0511.csv')
 
 #### CDC Data clean and pre-process ####
 CDCdf = CDCdf[CDCdf['State'] == 'United States']
@@ -80,14 +81,14 @@ states = ["Alabama","Alaska","Arizona","Arkansas","California","Colorado",
 
 lcstates = [x.lower() for x in states]
 
-df = dfs[df_names[-1]][dfs[df_names[-1]]['location_name'].isin(states)]
+# df = dfs[df_names[-1]][dfs[df_names[-1]]['location_name'].isin(states)]
 
-x = df['date'].unique()
-x = [dt.datetime.strptime(d,'%Y-%m-%d').date() for d in x]
+# x = df['date'].unique()
+# x = [dt.datetime.strptime(d,'%Y-%m-%d').date() for d in x]
 
 
-rootdir_os = 'C:\\Users\\chris.mclean\\Documents\\Python Scripts\\COVID analysis\\Los Alamos projections'
-rootdir_p = Path(r'C:\Users\chris.mclean\Documents\Python Scripts\COVID analysis\Los Alamos projections')
+rootdir_os = 'Los Alamos projections'
+rootdir_p = Path(r'Los Alamos projections')
 
 #### Los Alamos Model Ingest ####
 ladfs = {}
@@ -137,6 +138,14 @@ traces = {
 }
 
 
+def MAPE(predict,target):
+    return ( abs((target - predict) / target).mean())
+
+
+mape = {
+    'ihme': [0]*len(df_names),
+    'los_alamos': [0]*len(ladf_names)
+}
 
 artoo = {
     'ihme': [0]*len(df_names),
@@ -170,15 +179,16 @@ for i in range(len(df_names)):
         little_df = df[mask]
         pred_y = little_df.groupby(['date_reported'])['deaths_mean'].sum()
     finally:
-        x = [dt.datetime.strptime(d,'%Y-%m-%d').date() for d in x]
+        # x = [dt.datetime.strptime(d,'%Y-%m-%d').date() for d in x]
         traces['ihme'][0][i] = go.Scatter(x = x, y = y, opacity= 0.8, name = str('IHME projected deaths for '+ df_names[i]))
-        traces['ihme'][1][i] = go.Scatter(x = cov_x, y = cov_y, opacity = 0.8, name = "COVIDtracker.com recorded deaths")
-        traces['ihme'][2][i] = go.Scatter(x = x, y = CI_upper, opacity = 0.2, name = "95% CI", line = dict(dash = 'dash'))
-        traces['ihme'][3][i] = go.Scatter(x = x, y = CI_lower, opacity = 0.2, fill = 'tonexty', name = "95% CI", line = dict(dash = 'dash'))
+        traces['ihme'][1][i] = go.Scatter(x = cov_x, y = cov_y, opacity = 0.8, name = 'COVIDtracker.com recorded deaths')
+        traces['ihme'][2][i] = go.Scatter(x = x, y = CI_upper, opacity = 0.2, name = '95% CI', line = dict(dash = 'dash'))
+        traces['ihme'][3][i] = go.Scatter(x = x, y = CI_lower, opacity = 0.2, fill = 'tonexty', name = '95% CI', line = dict(dash = 'dash'))
         
         # Duplicating ihme for los alamos to test dropdown
         
         artoo['ihme'][i] = r2_score(artoo_y, pred_y).round(4)
+        mape['ihme'][i] = np.round(MAPE(artoo_y, pred_y), 4)
         
 for i in range(len(ladf_names)):
     df = ladfs[ladf_names[i]]
@@ -190,7 +200,7 @@ for i in range(len(ladf_names)):
     date_rng = pd.date_range(pred_date, max_date)
     cov_mask = covtrkrdf.date.isin(date_rng)
     covdf = covtrkrdf[cov_mask].set_index('date').iloc[::-1]
-    artoo_y = covdf.deathIncrease
+    artoo_y = covdf.death
     x = df['dates'].unique()
     y = df.groupby(['dates'])['q.50'].sum()
     CI_upper = df.groupby(['dates'])['q.95'].sum()
@@ -200,18 +210,18 @@ for i in range(len(ladf_names)):
     pred_y = little_df.groupby(['dates'])['q.50'].sum()
 
     traces['los_alamos'][0][i] = go.Scatter(x = x, y = y, opacity= 0.8, name = str('IHME projected deaths for '+ ladf_names[i]))
-    traces['los_alamos'][1][i] = go.Scatter(x = cov_x, y = cov_y, opacity = 0.8, name = "COVIDtracker.com recorded deaths")
-    traces['los_alamos'][2][i] = go.Scatter(x = x, y = CI_upper, opacity = 0.2, name = "95% CI", line = dict(dash = 'dash'))
-    traces['los_alamos'][3][i] = go.Scatter(x = x, y = CI_lower, opacity = 0.2, fill = 'tonexty', name = "95% CI", line = dict(dash = 'dash'))
+    traces['los_alamos'][1][i] = go.Scatter(x = cov_x, y = cov_y, opacity = 0.8, name = 'COVIDtracker.com recorded deaths')
+    traces['los_alamos'][2][i] = go.Scatter(x = x, y = CI_upper, opacity = 0.2, name = '95% CI', line = dict(dash = 'dash'))
+    traces['los_alamos'][3][i] = go.Scatter(x = x, y = CI_lower, opacity = 0.2, fill = 'tonexty', name = '95% CI', line = dict(dash = 'dash'))
 
     artoo['los_alamos'][i] = r2_score(artoo_y, pred_y).round(4)
-
+    mape['los_alamos'][i] = np.round(MAPE(artoo_y, pred_y), 4)
         
 # Create Dash app
 app = dash.Dash(
     __name__,
     meta_tags=[
-        {"name": "viewport", "content": "width=device-width, initial-scale=1.0"}
+        {'name': 'viewport', 'content': 'width=device-width, initial-scale=1.0'}
     ]
 )
 
