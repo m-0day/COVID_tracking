@@ -111,7 +111,8 @@ ladf_names.sort()
 
 for i in range(len(ladf_names)):
     ladfs[ladf_names[i]]['daily_deaths'] = ladfs[ladf_names[i]].groupby(['state'])['q.50'].diff()
-
+    ladfs[ladf_names[i]]['daily_95CI'] = ladfs[ladf_names[i]].groupby(['state'])['q.95'].diff()
+    ladfs[ladf_names[i]]['daily_05CI'] = ladfs[ladf_names[i]].groupby(['state'])['q.05'].diff()
 
 #### Make Plots ####
 # Slider for date of projection
@@ -206,8 +207,8 @@ for i in range(len(ladf_names)):
     artoo_y = covdf.deathIncrease
     x = [str(d)[:10] for d in df['dates'].unique()]
     y = df.groupby(['dates'])['daily_deaths'].sum()
-    CI_upper = df.groupby(['dates'])['q.95'].sum()
-    CI_lower = df.groupby(['dates'])['q.05'].sum()
+    CI_upper = df.groupby(['dates'])['daily_95CI'].sum()
+    CI_lower = df.groupby(['dates'])['daily_05CI'].sum()
     mask = pd.to_datetime(df.dates.values).isin(date_rng)
     little_df = df[mask]
     pred_y = little_df.groupby(['dates'])['daily_deaths'].sum()
