@@ -109,6 +109,9 @@ for subdir, dirs, files in os.walk(rootdir_os):
 
 ladf_names.sort()
 
+for i in range(len(ladf_names)):
+    ladfs[ladf_names[i]]['daily_deaths'] = ladfs[ladf_names[i]].groupby(['state'])['q.50'].diff()
+
 
 #### Make Plots ####
 # Slider for date of projection
@@ -200,14 +203,14 @@ for i in range(len(ladf_names)):
     date_rng = pd.date_range(pred_date, max_date)
     cov_mask = covtrkrdf.date.isin(date_rng)
     covdf = covtrkrdf[cov_mask].set_index('date').iloc[::-1]
-    artoo_y = covdf.death
+    artoo_y = covdf.deathIncrease
     x = [str(d)[:10] for d in df['dates'].unique()]
-    y = df.groupby(['dates'])['q.50'].sum()
+    y = df.groupby(['dates'])['daily_deaths'].sum()
     CI_upper = df.groupby(['dates'])['q.95'].sum()
     CI_lower = df.groupby(['dates'])['q.05'].sum()
     mask = pd.to_datetime(df.dates.values).isin(date_rng)
     little_df = df[mask]
-    pred_y = little_df.groupby(['dates'])['q.50'].sum()
+    pred_y = little_df.groupby(['dates'])['daily_deaths'].sum()
     traces['los_alamos'][0][i] = go.Scatter(x = x, y = y, opacity= 0.8, name = str('IHME projected deaths for '+ ladf_names[i]))
     traces['los_alamos'][1][i] = go.Scatter(x = cov_x, y = cov_y, opacity = 0.8, name = 'COVIDtracker.com recorded deaths')
     traces['los_alamos'][2][i] = go.Scatter(x = x, y = CI_upper, opacity = 0.2, name = '95% CI', line = dict(dash = 'dash'))
