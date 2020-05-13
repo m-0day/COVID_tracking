@@ -1,5 +1,4 @@
 pandas
-os
 pathlib
 plotly
 datetime
