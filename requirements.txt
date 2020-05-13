@@ -1,0 +1,8 @@
+pandas
+os
+pathlib
+plotly
+datetime
+sklearn
+numpy
+dash
