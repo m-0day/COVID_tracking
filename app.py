@@ -299,10 +299,10 @@ def display_value(model, date):
 def update_slider_range(model):
     return len(names[model]) - 1
 
-@app.callback(Output('date-slider', 'marks'),
-              [Input('dropdown', 'value')])
-def update_slider_range(model):
-    return marks[model]
+# @app.callback(Output('date-slider', 'marks'),
+#               [Input('dropdown', 'value')])
+# def update_slider_range(model):
+#     return marks[model]
 
 @app.callback(Output('info', 'children'),
               [Input('dropdown', 'value'),
